@@ -1,0 +1,6 @@
+2025-07-18T11:35:22.856Z [[32minfo[39m]: Server running on port 5000
+2025-07-18T11:35:22.930Z [[31merror[39m]: Unable to connect to the database:
+2025-07-18T11:35:22.931Z [[31merror[39m]: Error syncing database:
+2025-07-18T11:40:34.628Z [[32minfo[39m]: Server running on port 5000
+2025-07-18T11:40:44.660Z [[31merror[39m]: Unable to connect to the database: connect ETIMEDOUT
+2025-07-18T11:40:44.661Z [[31merror[39m]: Error syncing database: connect ETIMEDOUT
