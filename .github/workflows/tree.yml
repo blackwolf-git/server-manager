@@ -13,7 +13,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # للحصول على تاريخ كامل للمشروع
+        fetch-depth: 0
 
     - name: Generate file tree and contents
       run: |
@@ -35,11 +35,12 @@ jobs:
           cat "{}" >> tree.txt 2>/dev/null || echo "[Binary file or unreadable content]" >> tree.txt
         ' \;
         
-        # إزالة الأحرف الخاصة التي قد تسبب مشاكل
+        # إزالة الأحرف الخاصة
         sed -i 's/\x1B\[[0-9;]*[a-zA-Z]//g' tree.txt
         
-        # إضافة مقدمة للتوثيق
-        sed -i '1i# Project Structure and File Contents\n# Generated on '$(date)'\n' tree.txt
+        # إضافة مقدمة للتوثيق بطريقة مختلفة
+        CURRENT_DATE=$(date)
+        echo -e "# Project Structure and File Contents\n# Generated on ${CURRENT_DATE}\n$(cat tree.txt)" > tree.txt
 
     - name: Upload tree.txt as artifact
       uses: actions/upload-artifact@v4
