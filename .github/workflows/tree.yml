@@ -42,7 +42,7 @@ jobs:
         sed -i '1i# Project Structure and File Contents\n# Generated on '$(date)'\n' tree.txt
 
     - name: Upload tree.txt as artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: project-structure
         path: tree.txt
