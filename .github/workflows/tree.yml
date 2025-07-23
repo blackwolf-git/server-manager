@@ -1,9 +1,12 @@
-name: Generate Project Tree and Contents
+name: Generate Project Tree with All File Contents
 
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
+
+permissions:
+  contents: write  # الصلاحية الأساسية لحل مشكلة الـ 403
 
 jobs:
   generate-tree:
@@ -14,47 +17,53 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}  # مهم لإعطاء صلاحيات push
 
-    - name: Generate file tree and contents
+    - name: Install necessary tools
       run: |
-        # تثبيت أداة tree إذا لم تكن موجودة
-        if ! command -v tree &> /dev/null; then
-          sudo apt-get update
-          sudo apt-get install -y tree
-        fi
-        
-        # إنشاء شجرة الملفات
-        tree -a -I '.git' --charset=utf-8 --dirsfirst > tree.txt
-        
-        # إضافة محتويات الملفات
-        echo -e "\n\n=== FILE CONTENTS ===\n" >> tree.txt
-        
-        # البحث عن جميع الملفات (باستثناء .git) وإضافة محتواها
-        find . -type f -not -path './.git/*' -size -1M -exec sh -c '
-          echo -e "\n\n--- FILE: {} ---\n" >> tree.txt
-          cat "{}" >> tree.txt 2>/dev/null || echo "[Binary file or unreadable content]" >> tree.txt
-        ' \;
-        
-        # إزالة الأحرف الخاصة
-        sed -i 's/\x1B\[[0-9;]*[a-zA-Z]//g' tree.txt
-        
-        # إضافة مقدمة للتوثيق
-        CURRENT_DATE=$(date)
-        echo -e "# Project Structure and File Contents\n# Generated on ${CURRENT_DATE}\n$(cat tree.txt)" > tree.txt
+        sudo apt-get update
+        sudo apt-get install -y tree file
 
-    - name: Upload tree.txt as artifact
+    - name: Generate complete file structure
+      run: |
+        # إنشاء شجرة الملفات الكاملة
+        tree -a -I '.git' --charset=utf-8 --dirsfirst -v > full_tree.txt
+        
+        # إضافة محتويات جميع الملفات
+        echo -e "\n\n=== ALL FILE CONTENTS ===\n" >> full_tree.txt
+        
+        # معالجة جميع الملفات بما فيها الثنائية
+        find . -type f -not -path './.git/*' -exec sh -c '
+          echo -e "\n\n--- FILE: {} ---\n" >> full_tree.txt
+          echo "[File Type]: $(file -b {})" >> full_tree.txt
+          echo "[File Size]: $(du -h {} | cut -f1)" >> full_tree.txt
+          
+          # عرض محتوى الملف (النصي) أو وصف للملفات الثنائية
+          if grep -qI . "{}"; then
+            # ملف نصي - عرض أول 500 سطر
+            echo -e "\n[Text Content Preview]:" >> full_tree.txt
+            head -n 500 "{}" >> full_tree.txt 2>/dev/null
+          else
+            # ملف ثنائي - عرض معلومات hex أولية
+            echo -e "\n[Binary Content Preview]:" >> full_tree.txt
+            hexdump -C -n 256 "{}" >> full_tree.txt 2>/dev/null || \
+            echo "[Cannot display binary content]" >> full_tree.txt
+          fi
+        ' \;
+
+        # إضافة ترويسة الملف
+        echo -e "# Complete Project Structure with All File Contents\n# Generated on $(date -u)\n" | \
+        cat - full_tree.txt > tree.txt && rm full_tree.txt
+
+    - name: Upload complete tree
       uses: actions/upload-artifact@v4
       with:
-        name: project-structure
+        name: full-project-structure
         path: tree.txt
 
-    - name: Commit and push changes
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # ضروري للصلاحيات
+    - name: Commit and push results
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
         git add tree.txt
-        git commit -m "Update project tree and file contents [skip ci]" || echo "No changes to commit"
-        git push origin HEAD:${GITHUB_REF##*/}
+        git commit -m "Automated: Full project structure with all file contents [skip ci]" || exit 0
+        git push
