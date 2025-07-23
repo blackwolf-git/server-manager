@@ -1,0 +1,56 @@
+name: Generate Project Tree and Contents
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  generate-tree:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # للحصول على تاريخ كامل للمشروع
+
+    - name: Generate file tree and contents
+      run: |
+        # تثبيت أداة tree إذا لم تكن موجودة
+        if ! command -v tree &> /dev/null; then
+          sudo apt-get update
+          sudo apt-get install -y tree
+        fi
+        
+        # إنشاء شجرة الملفات
+        tree -a -I '.git' --charset=utf-8 --dirsfirst > tree.txt
+        
+        # إضافة محتويات الملفات
+        echo -e "\n\n=== FILE CONTENTS ===\n" >> tree.txt
+        
+        # البحث عن جميع الملفات (باستثناء .git) وإضافة محتواها
+        find . -type f -not -path './.git/*' -exec sh -c '
+          echo -e "\n\n--- FILE: {} ---\n" >> tree.txt
+          cat "{}" >> tree.txt 2>/dev/null || echo "[Binary file or unreadable content]" >> tree.txt
+        ' \;
+        
+        # إزالة الأحرف الخاصة التي قد تسبب مشاكل
+        sed -i 's/\x1B\[[0-9;]*[a-zA-Z]//g' tree.txt
+        
+        # إضافة مقدمة للتوثيق
+        sed -i '1i# Project Structure and File Contents\n# Generated on '$(date)'\n' tree.txt
+
+    - name: Upload tree.txt as artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: project-structure
+        path: tree.txt
+
+    - name: Commit and push changes
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git add tree.txt
+        git commit -m "Update project tree and file contents [skip ci]" || echo "No changes to commit"
+        git push
