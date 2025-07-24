@@ -1,0 +1,94 @@
+name: Build Solo Wolf Android App
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Generate file tree with contents
+      run: |
+        echo "Generating file tree with contents..."
+        OUTPUT_FILE="tree.txt"
+        echo "" > $OUTPUT_FILE
+        find . -type f ! -path "./.git/*" ! -path "./tree.txt" | while read file; do
+          echo "FILE: $file" >> $OUTPUT_FILE
+          echo "---------------------" >> $OUTPUT_FILE
+          cat "$file" >> $OUTPUT_FILE
+          echo -e "\n\n" >> $OUTPUT_FILE
+        done
+
+    - name: Upload file tree
+      uses: actions/upload-artifact@v4
+      with:
+        name: source-tree
+        path: tree.txt
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Install Gradle CLI
+      uses: gradle/gradle-build-action@v2
+
+    - name: Generate gradle-wrapper.jar if missing
+      run: |
+        if [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
+          echo "gradle-wrapper.jar not found. Generating using installed Gradle..."
+          gradle wrapper
+        fi
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x ./gradlew
+
+    - name: Build with Gradle and capture errors
+      run: |
+        ./gradlew assembleDebug --warning-mode all 2>errors.txt || true
+        if [ -f errors.txt ]; then
+          echo "Errors captured during build:"
+          cat errors.txt
+        fi
+
+    - name: Check if APK exists
+      run: |
+        if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "APK exists"
+        else
+          echo "APK does not exist"
+          exit 1
+        fi
+
+    - name: Clear Gradle Cache
+      run: |
+        rm -rf ~/.gradle/caches/
+        rm -rf ~/.gradle/wrapper/dists/
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: solo-wolf-apk
+        path: app/build/outputs/apk/debug/app-debug.apk
+
+    - name: Upload errors.txt if any errors occur
+      if: success() == false
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-errors
+        path: errors.txt
+
+    - name: Save build errors
+      if: failure()
+      run: |
+        echo "Build failed. Saving errors..."
+        cat errors.txt
+        exit 1
